@@ -144,59 +144,101 @@ HOME_AWAY <- c("home", "away")
   match_roster_elements
 }
 
-.expand_roster_elements <- function(expandable_roster_elements) {
-  # We need to wait a second between clicking, because otherwise
-  # the browser gets confused and skips some of them.
-  click_expand_element <- function(el) {
-    el$clickElement()
-    Sys.sleep(1)
-  }
+# .expand_roster_elements <- function(expandable_roster_elements) {
+#   # We need to wait a second between clicking, because otherwise
+#   # the browser gets confused and skips some of them.
+#   click_expand_element <- function(el) {
+#     el$clickElement()
+#     Sys.sleep(1)
+#   }
 
-  # We need to expand all of the hidden roster elements before collecting text,
-  # because Selenium can't interact with hidden elements,
-  # and sticking with RSelenium interactions rather than resorting
-  # to arbitrary JavaScript seems slightly less hacky.
-  expandable_roster_elements %>% purrr::map(click_expand_element)
-}
+#   # We need to expand all of the hidden roster elements before collecting text,
+#   # because Selenium can't interact with hidden elements,
+#   # and sticking with RSelenium interactions rather than resorting
+#   # to arbitrary JavaScript seems slightly less hacky.
+#   expandable_roster_elements %>% purrr::map(click_expand_element)
+# }
 
-.find_expandable_roster_elements <- function(browser) {
-  expandable_roster_elements <- list()
-  attempts <- 0
+# .find_expandable_roster_elements <- function(browser) {
+#   expandable_roster_elements <- list()
+#   attempts <- 0
 
-  # afl.com.au is using some sort of javascript framework for rendering
-  # any data-based elements, and they lazy-load those elements
-  # (probably some sort of componentDidMount -> API call),
-  # which means that data-based elements load a second or two
-  # after the rest of the page, which means we need to retry
-  # accessing the relevant DOM elements a few times before they finally load.
-  while (length(expandable_roster_elements) == 0 && attempts < 5) {
-    Sys.sleep(1)
+#   # afl.com.au is using some sort of javascript framework for rendering
+#   # any data-based elements, and they lazy-load those elements
+#   # (probably some sort of componentDidMount -> API call),
+#   # which means that data-based elements load a second or two
+#   # after the rest of the page, which means we need to retry
+#   # accessing the relevant DOM elements a few times before they finally load.
+#   while (length(expandable_roster_elements) == 0 && attempts < 5) {
+#     Sys.sleep(1)
 
-    expandable_roster_elements <- browser$findElements(
-      using = "css",
-      value = ".team-lineups__expandable-trigger.js-expand-trigger.is-hidden"
-    )
-    attempts <- attempts + 1
-  }
+#     expandable_roster_elements <- browser$findElements(
+#       using = "css",
+#       value = ".team-lineups__expandable-trigger.js-expand-trigger.is-hidden"
+#     )
+#     attempts <- attempts + 1
+#   }
 
-  expandable_roster_elements
+#   expandable_roster_elements
+# }
+
+.fetch_raw_roster_data <- function(splash_host, round_number) {
+  AFL_DOMAIN <- "https://www.afl.com.au"
+  TEAMS_PATH <- "/matches/team-lineups"
+
+  query_param <- if (is.null(round_number)) "" else paste0("?GameWeeks=", round_number)
+  url <- (paste0(AFL_DOMAIN, TEAMS_PATH, query_param))
+
+  lua_filepath <- here::here("R", "rosters.lua")
+  lua_source <- readLines(lua_filepath) %>% paste(., collapse = "\n")
+  fields <- jsonlite::toJSON(
+    list(
+      lua_source = lua_source,
+      url = url
+    ),
+    auto_unbox = TRUE
+  )
+
+  header <- c(`Content-Type`="application/json")
+
+  response <- RCurl::postForm(
+    paste0(splash_host, "/execute"),
+    .opts=list(httpheader = header, postfields=fields)
+  ) %>%
+    jsonlite::fromJSON(.)
 }
 
 #' Scrapes team roster data (i.e. which players are playing for each team) for
 #' a given round from afl.com.au, cleans it, and returns it as a dataframe.
 #' @importFrom magrittr %>%
-#' @param browser Selenium browser object for navigating to pages and crawling the DOM.
+#' @param splash_host Hostname of the splash server to use
 #' @export
-fetch_rosters <- function(browser) {
-  expandable_roster_elements <- .find_expandable_roster_elements(browser)
+fetch_rosters <- function(splash_host, round_number) {
+  return(.fetch_raw_roster_data(splash_host, round_number))
 
-  # If we can't find anything, we're probably trying to get rosters for a round
-  # for which they haven't been announced yet.
-  if (length(expandable_roster_elements) == 0) {
-    return(expandable_roster_elements)
+  raw_roster_data <- tryCatch(
+    {
+      .fetch_raw_roster_data(splash_host, round_number)
+    },
+    error = function(cond) {
+      message(cond)
+      list()
+    }
+  )
+
+  if (length(raw_roster_data) == 0) {
+    return(raw_roster_data)
   }
 
-  .expand_roster_elements(expandable_roster_elements)
+  # expandable_roster_elements <- .find_expandable_roster_elements(browser)
+
+  # # If we can't find anything, we're probably trying to get rosters for a round
+  # # for which they haven't been announced yet.
+  # if (length(expandable_roster_elements) == 0) {
+  #   return(expandable_roster_elements)
+  # }
+
+  # .expand_roster_elements(expandable_roster_elements)
 
   .collect_match_elements(browser) %>%
     purrr::reduce(.parse_match_elements, .init = list(match_id = 1)) %>%

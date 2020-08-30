@@ -99,34 +99,40 @@ function(start_date = FIRST_AFL_SEASON, end_date = END_OF_YEAR) {
 #' @param round_number Fetch the rosters from this round. Note that missing param defaults to current round
 #' @get /rosters
 function(round_number = NULL) {
-  server_address <- "browser"
-  port <- 4444L
+  # server_address <- "browser"
+  # port <- 4444L
 
-  browser <- RSelenium::remoteDriver(
-    remoteServerAddr = server_address,
-    browser = 'chrome',
-    port = port,
-    extraCapabilities = list(
-      "goog:chromeOptions" = list(
-        args = list(
-          "--headless",
-          "--no-sandbox",
-          "--disable-gpu",
-          "--disable-dev-shm-usage",
-          "window-size=1024,768"
-        )
-      )
-    )
+  # browser <- RSelenium::remoteDriver(
+  #   remoteServerAddr = server_address,
+  #   browser = 'chrome',
+  #   port = port,
+  #   extraCapabilities = list(
+  #     "goog:chromeOptions" = list(
+  #       args = list(
+  #         "--headless",
+  #         "--no-sandbox",
+  #         "--disable-gpu",
+  #         "--disable-dev-shm-usage",
+  #         "window-size=1024,768"
+  #       )
+  #     )
+  #   )
+  # )
+
+  splash_host <- ifelse(
+    .is_production(),
+    Sys.getenv("SPLASH_SERVICE"),
+    "http://splash:8050"
   )
 
-  tryCatch({
-    browser$open()
+  # tryCatch({
+    # browser$open()
 
-    query_param <- if (is.null(round_number)) "" else paste0("?GameWeeks=", round_number)
-    browser$navigate(paste0(AFL_DOMAIN, TEAMS_PATH, query_param))
-    roster_data <- fetch_rosters(browser) %>% list(data = .)
-  }, finally = {
-    browser$close()
-    browser$closeServer()
-  })
+    # query_param <- if (is.null(round_number)) "" else paste0("?GameWeeks=", round_number)
+    # browser$navigate(paste0(AFL_DOMAIN, TEAMS_PATH, query_param))
+  roster_data <- fetch_rosters(splash_host, round_number) %>% list(data = .)
+  # }, finally = {
+  #   browser$close()
+  #   browser$closeServer()
+  # })
 }
