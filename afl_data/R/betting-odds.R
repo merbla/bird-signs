@@ -86,7 +86,7 @@ fetch_betting_odds <- function(start_date, end_date) {
 
 
 .fetch_raw_odds_data <- function(splash_host) {
-  betting_website <- "https://www.tab.com.au/sports/betting/AFL%20Football"
+  betting_website <- "https://www.ladbrokes.com.au/sports/australian-rules/afl"
   lua_filepath <- here::here("R", "betting-odds.lua")
   lua_source <- readLines(lua_filepath) %>% paste(., collapse = "\n")
   fields <- jsonlite::toJSON(
@@ -102,8 +102,8 @@ fetch_betting_odds <- function(start_date, end_date) {
   response <- RCurl::postForm(
     paste0(splash_host, "/execute"),
     .opts=list(httpheader = header, postfields=fields)
-  ) %>%
-    jsonlite::fromJSON(.)
+  ) #%>%
+    #jsonlite::fromJSON(.)
 }
 
 
@@ -113,6 +113,8 @@ fetch_betting_odds <- function(start_date, end_date) {
 #' @export
 scrape_betting_odds <- function(splash_host) {
   raw_betting_data <- .fetch_raw_odds_data(splash_host)
+
+  return(raw_betting_data)
 
   if (length(raw_betting_data) == 0) {
     return(NULL)
